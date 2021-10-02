@@ -1,0 +1,89 @@
+---
+title: "Practical Machine Learning Project"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Project introduction
+### Background
+##### Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+### Data
+##### The training data for this project are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+##### The test data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+##### The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+### Assignment
+##### The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+# Getting and Cleaning Data
+### Load library
+```{r, message=FALSE, warning=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+library(knitr)
+```
+### Getting Data
+```{r echo=TRUE}
+testing_Set <- read.csv("pml-testing.csv")
+training_Set <- read.csv("pml-training.csv")
+train_in <- createDataPartition(training_Set$classe, p=0.6, list=FALSE)
+training_Data <- training_Set[train_in, ]
+testing_Data <- training_Set[-train_in, ]
+```
+### Cleaning Data
+```{r echo=TRUE}
+# remove variables with nearly zero variance
+var_Zero <- nearZeroVar(training_Data)
+training_Data <- training_Data[, -var_Zero]
+testing_Data <- testing_Data[, -var_Zero]
+# remove variables that are almostly NA
+var_NA <- sapply(training_Data, function(x) mean(is.na(x))) > 0.95
+training_Data <- training_Data[, var_NA == F]
+testing_Data <- testing_Data[, var_NA == F]
+# remove identification only variables (columns 1 to 5)
+training_Data <- training_Data[, -(1:5)]
+testing_Data  <- testing_Data[, -(1:5)]
+```
+# Predict Data by various models
+### 1. Random forest
+```{r echo=TRUE}
+modelFit_RF <- randomForest(classe~., data=training_Data)
+modelFit_RF
+# Prediction using Random forest
+predict_RF <- predict(modelFit_RF, testing_Data, type="class")
+confusionMatrix(testing_Data$classe, predict_RF)
+```
+### 2. Decision tree
+```{r echo=TRUE}
+modelFit_DT <- rpart(classe~., training_Data)
+# Prediction using Decision tree
+predict_DT <- predict(modelFit_DT, testing_Data, type="class")
+confusionMatrix(testing_Data$classe, predict_DT)
+```
+### 3. Generalized Boosted Model (GBM)
+```{r, message=FALSE, warning=FALSE}
+control_GBM <- trainControl(method = "repeatedcv", number=5, repeats=1)
+modelFit_GBM <- train(classe~., training_Data, method="gbm", trControl=control_GBM, verbose=FALSE)
+```
+```{r echo=TRUE}
+# Prediction using GBM
+predict_GBM <- predict(modelFit_GBM, testing_Data)
+confusionMatrix(predict_GBM, testing_Data$classe)
+```
+
+# Error and Cross validation
+#### Random forest, Dicision tree, and GBM models give us 99.6 %, 75.4 %, and 98.8 % as accuracy, respectively.
+#### The expected sample errors for Random forest, Dicision tree, and GBM are 0.4 %, 24.6 %, and 1.2 %, respectively.
+
+# Final test
+#### Run the algorithm to the 20 test cases in the test data using most accurate model Random forest.
+```{r echo=TRUE}
+predict_Final_Test <- predict(modelFit_RF, testing_Set, type = "class")
+predict_Final_Test
+```
